@@ -11,7 +11,7 @@ import 'country.dart';
 
 class InternationalPhoneInput extends StatefulWidget {
   final void Function(String phoneNumber, String internationalizedPhoneNumber,
-      String isoCode) onPhoneNumberChange;
+      String isoCode, String threeDigitCode) onPhoneNumberChange;
   final String initialPhoneNumber;
   final String initialSelection;
   final String errorText;
@@ -22,29 +22,22 @@ class InternationalPhoneInput extends StatefulWidget {
   final TextStyle labelStyle;
   final int errorMaxLines;
   final List<String> enabledCountries;
-  final InputDecoration decoration;
-  final bool showCountryCodes;
-  final bool showCountryFlags;
-  final Widget dropdownIcon;
   final InputBorder border;
 
-  InternationalPhoneInput(
-      {this.onPhoneNumberChange,
-      this.initialPhoneNumber,
-      this.initialSelection,
-      this.errorText,
-      this.hintText,
-      this.labelText,
-      this.errorStyle,
-      this.hintStyle,
-      this.labelStyle,
-      this.enabledCountries = const [],
-      this.errorMaxLines,
-      this.decoration,
-      this.showCountryCodes = true,
-      this.showCountryFlags = true,
-      this.dropdownIcon,
-      this.border});
+  InternationalPhoneInput({
+    this.onPhoneNumberChange,
+    this.initialPhoneNumber,
+    this.initialSelection,
+    this.errorText,
+    this.hintText,
+    this.labelText,
+    this.errorStyle,
+    this.hintStyle,
+    this.labelStyle,
+    this.enabledCountries = const [],
+    this.errorMaxLines,
+    this.border,
+  });
 
   static Future<String> internationalizeNumber(String number, String iso) {
     return PhoneService.getNormalizedPhoneNumber(number, iso);
@@ -70,12 +63,6 @@ class _InternationalPhoneInputState extends State<InternationalPhoneInput> {
   int errorMaxLines;
 
   bool hasError = false;
-  bool showCountryCodes;
-  bool showCountryFlags;
-
-  InputDecoration decoration;
-  Widget dropdownIcon;
-  InputBorder border;
 
   _InternationalPhoneInputState();
 
@@ -90,10 +77,6 @@ class _InternationalPhoneInputState extends State<InternationalPhoneInput> {
     hintStyle = widget.hintStyle;
     labelStyle = widget.labelStyle;
     errorMaxLines = widget.errorMaxLines;
-    decoration = widget.decoration;
-    showCountryCodes = widget.showCountryCodes;
-    showCountryFlags = widget.showCountryFlags;
-    dropdownIcon = widget.dropdownIcon;
 
     phoneTextController.addListener(_validatePhoneNumber);
     phoneTextController.text = widget.initialPhoneNumber;
@@ -134,10 +117,12 @@ class _InternationalPhoneInputState extends State<InternationalPhoneInput> {
           if (isValid) {
             PhoneService.getNormalizedPhoneNumber(phoneText, selectedItem.code)
                 .then((number) {
-              widget.onPhoneNumberChange(phoneText, number, selectedItem.code);
+              widget.onPhoneNumberChange(
+                  phoneText, number, selectedItem.code, selectedItem.alphaCode);
             });
           } else {
-            widget.onPhoneNumberChange('', '', selectedItem.code);
+            widget.onPhoneNumberChange(
+                '', '', selectedItem.code, selectedItem.alphaCode);
           }
         }
       });
@@ -156,13 +141,16 @@ class _InternationalPhoneInputState extends State<InternationalPhoneInput> {
             name: elem['en_short_name'],
             code: elem['alpha_2_code'],
             dialCode: elem['dial_code'],
+            alphaCode: elem['alpha_3_code'],
             flagUri: 'assets/flags/${elem['alpha_2_code'].toLowerCase()}.png');
       } else if (widget.enabledCountries.contains(elem['alpha_2_code']) ||
-          widget.enabledCountries.contains(elem['dial_code'])) {
+          widget.enabledCountries.contains(elem['dial_code']) ||
+          widget.enabledCountries.contains(elem['alpha_3_code'])) {
         return Country(
             name: elem['en_short_name'],
             code: elem['alpha_2_code'],
             dialCode: elem['dial_code'],
+            alphaCode: elem['alpha_3_code'],
             flagUri: 'assets/flags/${elem['alpha_2_code'].toLowerCase()}.png');
       } else {
         return null;
@@ -177,19 +165,18 @@ class _InternationalPhoneInputState extends State<InternationalPhoneInput> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.start,
-        children: <Widget>[
-          DropdownButtonHideUnderline(
-            child: Padding(
-              padding: EdgeInsets.only(top: 8),
+      child: TextField(
+        keyboardType: TextInputType.phone,
+        inputFormatters: [
+          WhitelistingTextInputFormatter.digitsOnly,
+        ],
+        controller: phoneTextController,
+        decoration: InputDecoration(
+          prefix: Container(
+            margin: EdgeInsets.only(left: 4.0, right: 4.0),
+            child: DropdownButtonHideUnderline(
               child: DropdownButton<Country>(
                 value: selectedItem,
-                icon: Padding(
-                  padding:
-                      EdgeInsets.only(bottom: (decoration != null) ? 6 : 0),
-                  child: dropdownIcon ?? Icon(Icons.arrow_drop_down),
-                ),
                 onChanged: (Country newValue) {
                   setState(() {
                     selectedItem = newValue;
@@ -204,17 +191,13 @@ class _InternationalPhoneInputState extends State<InternationalPhoneInput> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                         children: <Widget>[
-                          if (showCountryFlags) ...[
-                            Image.asset(
-                              value.flagUri,
-                              width: 32.0,
-                              package: 'international_phone_input',
-                            )
-                          ],
-                          if (showCountryCodes) ...[
-                            SizedBox(width: 4),
-                            Text(value.dialCode)
-                          ]
+                          Image.asset(
+                            value.flagUri,
+                            width: 32.0,
+                            package: 'international_phone_input',
+                          ),
+                          SizedBox(width: 4),
+                          Text(value.dialCode)
                         ],
                       ),
                     ),
@@ -223,23 +206,15 @@ class _InternationalPhoneInputState extends State<InternationalPhoneInput> {
               ),
             ),
           ),
-          Flexible(
-              child: TextField(
-            keyboardType: TextInputType.phone,
-            controller: phoneTextController,
-            decoration: decoration ??
-                InputDecoration(
-                  hintText: hintText,
-                  labelText: labelText,
-                  errorText: hasError ? errorText : null,
-                  hintStyle: hintStyle ?? null,
-                  errorStyle: errorStyle ?? null,
-                  labelStyle: labelStyle,
-                  errorMaxLines: errorMaxLines ?? 3,
-                  border: border ?? null,
-                ),
-          ))
-        ],
+          border: widget.border,
+          hintText: hintText,
+          labelText: labelText,
+          errorText: hasError ? errorText : null,
+          hintStyle: hintStyle ?? null,
+          errorStyle: errorStyle ?? null,
+          labelStyle: labelStyle,
+          errorMaxLines: errorMaxLines ?? 3,
+        ),
       ),
     );
   }
